@@ -1,0 +1,55 @@
+
+library(Biobase)
+input_tsv <- exprs(gset)
+row.names(input_tsv) <- fData(gset)$SYMBOL
+input_tsv <- input_tsv[!is.na(row.names(input_tsv)),]
+input_tsv <- t(input_tsv) #A tab-separated omics data table with samples as rows and genes as columns.
+  input_tsv <- as.data.frame(input_tsv)
+write.table(input_tsv, file="input_tsv", sep="\t")
+
+>import_data_table omics -h
+>import_data_table omics --duplicate-genes max --use-synonyms input_tsv rna_expression Pfizer output_tbl
+###Change extension to .tbl before import to D4C
+
+
+###Meta Data
+Meta <- pData(gset)
+write.table(Meta, file="Meta.tsv", sep="\t")
+#Transfer to D4C
+#Run App Engine/Data Procession/Meta CSV/TSV Import
+
+
+####Summary Statistics
+#### Need the following columns
+#### fold change, p values, q values, test statistics)
+
+topTable(efit1)
+library(dplyr)
+library(tidyverse)
+
+GeneExpressionStat <- function(COEF=1){
+  Stat <- topTable(efit1,COEF, number = Inf)[,c("hgnc_symbol","AveExpr", "logFC", "P.Value", "adj.P.Val", "t")]
+  result <- Stat %>% 
+    group_by(hgnc_symbol) %>%
+    mutate(Max = max(AveExpr))%>%
+    filter(AveExpr == Max) %>%
+    arrange("logFC", "P.Value", "adj.P.Val", "t") %>% 
+    distinct()%>%
+    filter(!is.na( hgnc_symbol))
+  
+  
+  result <- data.frame(result)
+    row.names(result) <- result$hgnc_symbol
+    result <- result[,c("logFC", "P.Value", "adj.P.Val", "t")]
+    result <- result %>% replace_na(.)
+    result <- result[row.names(result)!="",]
+    
+    return(result)
+}
+TNFresult <- GeneExpressionStat(COEF=2)
+MTXresult <- GeneExpressionStat(COEF=1)    
+write.table(MTXresult, file="MTXresult.tsv", sep="\t")
+write.table(TNFresult, file="TNFresult.tsv", sep="\t")
+
+#>import_data_table genestats --use-synonyms --duplicate-genes-p-value-column best MTXresult.tsv MTXresult_out.tbl
+
